@@ -84,6 +84,9 @@ int main(int argc, char *argv[])
 /* step 4 */
 // gcc main.c -o cut && tail -n5 data/fourchords.csv | ./cut -f"1 2" && rm cut
 
+/* step 5 */
+// gcc main.c -o cut && ./cut -f2 -d, data/fourchords.csv | uniq | ../1.\ wc\ tool/ccwc.sh -l
+
 // gcc main.c -o cut && ./cut data/sample.tsv && rm cut
 // gcc main.c -o cut && ./cut -f2 data/sample.tsv && rm cut
 // gcc main.c -o cut && ./cut -f2 data/sample.tsv | head -n5 && rm cut
