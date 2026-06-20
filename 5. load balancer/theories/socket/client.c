@@ -3,42 +3,62 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <pthread.h>
 
-int main()
+void *worker(void *arg)
 {
-    int sock = 0;
+    int id = *(int *)arg;
+
+    int sock;
     struct sockaddr_in serv_addr;
-    const char *hello = "Hello from client";
     char buffer[1024] = {0};
 
-    // create socket file descriptor
-    if((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        printf("\n Socket creation error \n");
-        exit(1);
-    }
+    sock = socket(AF_INET, SOCK_STREAM, 0);
 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(8080);
+    inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr);
 
-    if(inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0) {
-        printf("\nInvalid address / address not supported \n");
-        exit(1);
-    }
+    connect(sock,
+            (struct sockaddr *)&serv_addr,
+            sizeof(serv_addr));
 
-    // 2. connect to the server
-    if(connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-        printf("\nConnection Failed\n");
-        return -1;
-    }
+    char msg[64];
+    sprintf(msg, "Hello from thread %d", id);
 
-    // 3. send and read data
-    send(sock, hello, strlen(hello), 0);
-    printf("Hello message sent\n");
-    read(sock, buffer, 1024);
-    printf("Server response: %s\n", buffer);
+    send(sock, msg, strlen(msg), 0);
 
-    // 4. close the socket
+    read(sock, buffer, sizeof(buffer));
+
+    printf("[Thread %d] Response: %s\n", id, buffer);
+
     close(sock);
+
+    return NULL;
+}
+
+int main(void)
+{
+    int n = 100;
+    pthread_t threads[n];
+    int ids[n];
+
+    for (int i = 0; i < n; i++) {
+        ids[i] = i;
+
+        pthread_create(
+            &threads[i],
+            NULL,
+            worker,
+            &ids[i]
+        );
+    }
+
+    for (int i = 0; i < n; i++) {
+        pthread_join(threads[i], NULL);
+    }
 
     return 0;
 }
+
+// gcc client.c -o client -lpthread && time ./client

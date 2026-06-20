@@ -107,7 +107,12 @@ fi
 
 # default behavior (no flags)
 if [ -z "$output" ]; then
-  printf "%8d %8d %8d %s\n" "$lines" "$words" "$bytes" "$file"
-else
+  output="$(printf "%8d %8d %8d" "$lines" "$words" "$bytes")"
+fi
+
+# only append the filename when reading from an actual file (not a pipe)
+if [ -n "$file" ]; then
   printf "%s %s\n" "$output" "$file"
+else
+  printf "%s\n" "$output"
 fi
