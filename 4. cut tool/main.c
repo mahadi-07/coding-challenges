@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <ctype.h>
 #include <stdlib.h>
 
 #define BUFSIZE 1000
@@ -10,33 +11,58 @@ int main(int argc, char *argv[])
         exit(1);
     }
 
-    char *filename = *++argv;
-    if(filename[0] == '-' && filename[1] == 'f') {
-        int col = atoi(filename + 2);
-        if(col > 0) {
-            char *curargv = *++argv;
-            char delimiter = '\t'; /* default delimiter */
-            
-            if(curargv[0] == '-' && curargv[1] == 'd') { /* delimitar present */
-                delimiter = curargv[2];    
-                curargv = *++argv;
-            }
+    char delimiter = '\t';
+    unsigned int col_fetch = 0;
+    int cval = 0;
+    char *filename = NULL;
 
-            FILE *fp = fopen(curargv, "r");
-
-            char buf[BUFSIZE];
-            while(fgets(buf, BUFSIZE, fp) != NULL) {
-                char *p = buf;
-                int field = 1;
-                while(*p) {
-                    if(delimiter == *p)
-                        field++;
-                    else 
-                        if(field == col) printf("%c", *p);
-
-                    p++;
+    for(int i = 1; i < argc; i++) {
+        if(argv[i][0] == '-' && argv[i][1] == 'f') {
+            char *carg = argv[i] + 2;
+            while(*carg) {
+                if(*carg == ' ' || *carg == ',') {
+                    col_fetch |= (1u << cval);
+                    cval = 0;
                 }
+                else if(!isdigit((unsigned char) *carg)) {
+                    fprintf(stderr, "provided cmd contain invalid values: %s\n", *argv);
+                    exit(1);
+                }
+                else
+                    cval = cval * 10 + (*carg - '0');
+                carg++;
             }
+            col_fetch |= (1u << cval);
+        }
+        else if(argv[i][0] == '-' && argv[i][1] == 'd')
+            delimiter = *(argv[i] + 2);
+        else
+            filename = argv[i];
+    }
+
+   if(col_fetch > 0) {
+        FILE *fp = fopen(filename, "r");
+        if(fp == NULL) {
+            fprintf(stderr, "error opending file: %s\n", filename);
+            exit(1);
+        }
+
+        char buf[BUFSIZE];
+        while(fgets(buf, BUFSIZE, fp) != NULL) {
+            char *p = buf;
+            int field = 1;
+            while(*p) {
+                if(delimiter == *p) {
+                    field++;
+                    if(*p != '\n' && (col_fetch & (1 << field)))
+                        putchar(delimiter);
+                }
+                else 
+                    if(col_fetch & (1 << field)) printf("%c", *p);
+
+                p++;
+            }
+            putchar('\n');
         }
     }
 
@@ -48,7 +74,10 @@ int main(int argc, char *argv[])
 
 /* step 2: gcc main.c -o cut && ./cut -f1 -d, data/fourchords.csv | head -n5 && rm cut */
 
-
+/* step 3 */
+/* gcc main.c -o cut && ./cut -f"1 2, 3, 4" data/sample.tsv && rm cut */
+/* gcc main.c -o cut && ./cut -f1,2,3,4 -d, data/fourchords.csv | head -n5 && rm cut */
+// gcc main.c -o cut && ./cut -d, -f1,2,3,4 data/fourchords.csv | head -n5 && rm cut
 
 // gcc main.c -o cut && ./cut data/sample.tsv && rm cut
 // gcc main.c -o cut && ./cut -f2 data/sample.tsv && rm cut
