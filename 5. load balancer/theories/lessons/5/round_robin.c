@@ -46,6 +46,8 @@ int connect_backend(const char *host, int port)
 
 int main()
 {
+    setvbuf(stdout, NULL, _IOLBF, 0);   // line-buffered: same fix as backend.c
+
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
     int opt = 1;
@@ -90,6 +92,7 @@ int main()
         char buffer[8192];
 
         ssize_t n = read(client, buffer, sizeof(buffer));
+        printf("\n\n[User msg: \n %s\n\n", buffer);
         write(backend, buffer, n);
 
         while((n = read(backend, buffer, sizeof(buffer))) > 0) {

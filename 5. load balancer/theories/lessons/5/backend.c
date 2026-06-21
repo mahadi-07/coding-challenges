@@ -38,6 +38,8 @@ int main(int argc, char *argv[])
         char buf[4096];
         read(conn, buf, sizeof(buf));
 
+        printf("User [msg: %s]\n", buf);
+
         char response[512];
         snprintf(response, sizeof(response),
             "HTTP/1.1 200 OK\r\n"
