@@ -9,7 +9,9 @@ void test_simple_string()
         "$4\r\nname\r\n"
         "$5\r\nhasan\r\n";
 
-    RespValue *arr = parse(msg);
+    RespValue *resp = parse(msg);
+
+    free_resp(resp);
     
 }
 
