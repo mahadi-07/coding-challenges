@@ -34,8 +34,8 @@ RespValue *make_string(char *str)
         return NULL;
 
     v->type = BULK_STRINGS;
-    v->data.string = str;
-
+    v->data.string = strdup(str);
+    
     return v;
 }
 
@@ -54,7 +54,12 @@ RespValue *parse_simple_string(const char *buf)
             *p++ = *buf++;
     }
     *p = '\0';
-    return make_string(word);
+
+    RespValue *resp = make_string(word);
+    
+    free(word);
+    
+    return resp;
 }
 
 /**
@@ -71,7 +76,7 @@ char *get_word(const char *buf, int sz)
     return word;
 }
 
-RespValue *resp_alloc(int sz, enum resp_type type)
+RespValue *resp_alloc_arr(int sz, enum resp_type type)
 {
     RespValue *resp = malloc(sizeof(*resp));
     if(resp == NULL)
@@ -92,14 +97,20 @@ RespValue *parse_array(const char *buf)
         if(*buf == '*') {
             arr_sz = strtol(buf+1, &endptr, BASE_10);
             buf = (endptr+2);
-            arr = resp_alloc(arr_sz, ARRAYS);
+            arr = resp_alloc_arr(arr_sz, ARRAYS);
         }
         else if(*buf == '$') {
             int str_sz = strtol(buf+1, &endptr, BASE_10);
             buf = endptr;
             char *word = get_word(buf+2, str_sz);
             buf += (2+str_sz+2);
+            
+            if(i >= arr_sz) {
+                perror("out of index");
+                exit(1);
+            }
             arr->data.array.items[i++] = make_string(word);
+            free(word);
         }
         else ++buf;
     }
