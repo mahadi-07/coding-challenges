@@ -22,7 +22,8 @@ enum resp_type get_identify_type(const char *buf)
             return ARRAYS;
 
         default:
-            return -1;
+            perror("invalid type");
+            exit(1);
     }
 }
 
@@ -45,11 +46,12 @@ RespValue *parse_simple_string(const char *buf)
 {
     char *word = malloc(strlen(buf) + 1);
     char *p = word;
+    buf++;
     while(*buf) {
-        if(*buf == '+' || *buf == '"') buf++;
-        else if(*buf == '\r' && *(buf+1) == '\n')
+        if(*buf == '\r' && *(buf+1) == '\n')
             break;
-        *p++ = *buf++;
+        else
+            *p++ = *buf++;
     }
     *p = '\0';
     return make_string(word);
@@ -61,6 +63,9 @@ RespValue *parse_simple_string(const char *buf)
 char *get_word(const char *buf, int sz)
 {
     char *word = malloc(sz + 1);
+    if(word == NULL)
+        return NULL;
+
     memcpy(word, buf, sz);
     word[sz] = '\0';
     return word;
