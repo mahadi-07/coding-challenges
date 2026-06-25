@@ -18,7 +18,7 @@ struct RespValue {
 
     union {
         char *string;
-        long integer;
+        long i_val;
 
         struct {
             int count;

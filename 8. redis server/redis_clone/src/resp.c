@@ -33,7 +33,7 @@ RespValue *make_string(char *str)
     if(!v)
         return NULL;
 
-    v->type = BULK_STRINGS;
+    v->type = SIMPLE_STRING;
     v->data.string = strdup(str);
     
     return v;
@@ -62,6 +62,26 @@ RespValue *parse_simple_string(const char *buf)
     return resp;
 }
 
+RespValue *parse_error(const char *buf)
+{
+    RespValue *err = parse_simple_string(buf);
+    err->type = ERRORS;
+    return err;
+}
+
+RespValue *parse_integer(const char *buf)
+{
+    RespValue *i_resp = parse_simple_string(buf);
+
+    long i_val = strtol(i_resp->data.string, NULL, BASE_10);
+    free(i_resp->data.string);
+
+    i_resp->type = INTEGERS;
+    i_resp->data.i_val = i_val;
+
+    return i_resp;
+}
+
 /**
  * Array
  */
@@ -84,7 +104,7 @@ RespValue *resp_alloc_arr(int sz, enum resp_type type)
 
     resp->type = type;
     resp->data.array.count = sz;
-    resp->data.array.items = malloc(sz * sizeof(struct RespValue *));
+    if(sz > 0) resp->data.array.items = malloc(sz * sizeof(struct RespValue *));
     return resp;
 } 
 
@@ -98,6 +118,7 @@ RespValue *parse_array(const char *buf)
             arr_sz = strtol(buf+1, &endptr, BASE_10);
             buf = (endptr+2);
             arr = resp_alloc_arr(arr_sz, ARRAYS);
+            if(arr_sz == -1) return arr; /* "*-1\r\n" represent Null Array */
         }
         else if(*buf == '$') {
             int str_sz = strtol(buf+1, &endptr, BASE_10);
@@ -121,12 +142,19 @@ RespValue *parse_array(const char *buf)
 
 RespValue *parse(const char *buf)
 {
+    // printf("\nparse: %50s\n\n", buf);
+    // printf("\n type: %d\n", get_identify_type(buf));
+
     switch (get_identify_type(buf))
     {
         case SIMPLE_STRING:
             return parse_simple_string(buf);
         case ARRAYS:
             return parse_array(buf);
+        case ERRORS:
+            return parse_error(buf);
+        case INTEGERS:
+            return parse_integer(buf);
         
         default:
             perror("unknown type");
@@ -151,11 +179,12 @@ void free_resp(RespValue *resp)
             break;
 
         case ARRAYS:
-            for (int i = 0; i < resp->data.array.count; i++) {
-                free_resp(resp->data.array.items[i]);
+            if(resp->data.array.count > 0) {
+                for (int i = 0; i < resp->data.array.count; i++) {
+                    free_resp(resp->data.array.items[i]);
+                }
+                free(resp->data.array.items);
             }
-
-            free(resp->data.array.items);
             break;
     }
 
