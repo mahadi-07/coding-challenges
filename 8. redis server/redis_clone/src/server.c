@@ -1,16 +1,59 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include "server.h"
+#include "resp.h"
+
+static void send_str(int conn, const char *s)
+{
+    send(conn, s, strlen(s), 0);
+}
+
+/* Handle one client: read RESP commands and reply, until the client disconnects. */
+static void handle_client(int conn)
+{
+    char buffer[1024];
+
+    while (1) {
+        ssize_t n = read(conn, buffer, sizeof(buffer) - 1);
+        if (n <= 0)
+            break;                       // client closed the connection
+        buffer[n] = '\0';
+
+        printf("User given command [ %50s ]\n", buffer);
+        RespValue *cmd = parse(buffer);
+        printf("%s\n", resp_type_to_string(cmd->type));
+
+        char *name = cmd->data.array.items[0]->data.string;
+
+        if (strcasecmp(name, "PING") == 0) {
+            send_str(conn, "+PONG\r\n");                       // simple string
+        } else if (strcasecmp(name, "ECHO") == 0) {
+            if (cmd->data.array.count < 2) {
+                send_str(conn, "-ERR wrong number of arguments for 'echo'\r\n");
+            } else {
+                char *arg = cmd->data.array.items[1]->data.string;
+                char reply[2048];
+                int len = snprintf(reply, sizeof(reply), "$%zu\r\n%s\r\n",
+                                   strlen(arg), arg);           // bulk string
+                send(conn, reply, len, 0);
+            }
+        } else {
+            send_str(conn, "-ERR unknown command\r\n");
+        }
+
+        free_resp(cmd);
+    }
+}
 
 int start_server(int port)
 {
     int server_fd;
     struct sockaddr_in address;
     socklen_t addrlen = sizeof(address);
-    const char *hello = "Hello from looping server";
 
     // 1. create socket
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -18,7 +61,7 @@ int start_server(int port)
         exit(EXIT_FAILURE);
     }
 
-    // NEW: allow immediate reuse of the port after restart (skip TIME_WAIT)
+    // allow immediate reuse of the port after restart (skip TIME_WAIT)
     int opt = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
         perror("setsockopt");
@@ -43,29 +86,23 @@ int start_server(int port)
 
     printf("Server listening on port %d (Ctrl+C to stop)...\n", port);
 
-    // 4. THE LOOP: serve clients forever
+    // 4. serve clients forever
     while (1) {
         int conn = accept(server_fd, (struct sockaddr *)&address, &addrlen);
         if (conn < 0) {
             perror("accept");
-            continue;          // don't crash on one bad accept; keep serving
+            continue;
         }
 
-        // who connected? convert the client's IP back to a readable string
         char client_ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &address.sin_addr, client_ip, sizeof(client_ip));
         printf("Got a connection from %s:%d\n", client_ip, ntohs(address.sin_port));
 
-        char buffer[1024] = {0};
-        read(conn, buffer, sizeof(buffer) - 1);
-        printf("  Client said: %s\n", buffer);
+        handle_client(conn);   // read / parse / reply until the client leaves
 
-        send(conn, hello, strlen(hello), 0);
-
-        close(conn);           // close THIS client's socket, NOT server_fd
-        // loop back up to accept() the next client
+        close(conn);
     }
 
-    close(server_fd);          // unreachable here, but correct in spirit
+    close(server_fd);   // unreachable — the server runs until killed
     return 0;
 }

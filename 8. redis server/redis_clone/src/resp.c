@@ -27,6 +27,18 @@ enum resp_type get_identify_type(const char *buf)
     }
 }
 
+const char* resp_type_to_string(enum resp_type t)
+{
+    switch (t) {
+        case SIMPLE_STRING:  return "SIMPLE_STRING";
+        case ERRORS:         return "ERROR";
+        case INTEGERS:       return "INTEGER";
+        case BULK_STRINGS:   return "BULK_STRING";
+        case ARRAYS:         return "ARRAY";
+        default:             return "UNKNOWN";
+    }
+}
+
 RespValue *make_string(char *str)
 {
     RespValue *v = malloc(sizeof(* v));

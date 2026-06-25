@@ -32,4 +32,6 @@ RespValue *parse(const char *buf);
 
 void free_resp(RespValue *resp);
 
+const char* resp_type_to_string(enum resp_type t);
+
 #endif
