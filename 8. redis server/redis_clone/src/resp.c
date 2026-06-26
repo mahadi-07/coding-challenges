@@ -145,11 +145,29 @@ RespValue *parse_array(const char *buf)
 }
 
 
+/* Inline command line, e.g. "PING\r\n" or "GET foo\r\n".
+     Returns a SIMPLE_STRING holding just the command name. */
+static RespValue *parse_inline(const char *buf)
+{
+    while (*buf == ' ') buf++;
+    const char *start = buf;
+    while (*buf && *buf != ' ' && *buf != '\r' && *buf != '\n') buf++;
+    size_t len = buf - start;
+
+    char tmp[256];
+    if (len >= sizeof(tmp)) len = sizeof(tmp) - 1;
+    memcpy(tmp, start, len);
+    tmp[len] = '\0';
+
+    return make_string(tmp);
+}
+
 
 RespValue *parse(const char *buf)
 {
-    // printf("\nparse: %50s\n\n", buf);
-    // printf("\n type: %d\n", get_identify_type(buf));
+    char c = buf[0];
+    if (c != '+' && c != '-' && c != ':' && c != '$' && c != '*')
+        return parse_inline(buf);
 
     switch (get_identify_type(buf))
     {

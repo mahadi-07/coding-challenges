@@ -31,14 +31,16 @@ void *per_client(void *arg)
 
     while(1) {
         ssize_t n = read(conn, buffer, sizeof(buffer) - 1);
-        if (n <= 0) break;
+        if(n <= 0) break;
         buffer[n] = '\0';
 
-        printf("User given command [ %50s ]\n", buffer);
         RespValue *cmd = parse(buffer);
-        // printf("%10s\n", resp_type_to_string(cmd->type));
 
-        char *cmd_name = cmd->data.array.items[0]->data.string;
+        const char *cmd_name = NULL;
+        if(cmd->type == ARRAYS) cmd_name = cmd->data.array.items[0]->data.string;
+        else if(cmd->type == SIMPLE_STRING) cmd_name = cmd->data.string;
+        
+        printf("command name: %s\n", cmd_name);
 
         if (strcasecmp(cmd_name, "PING") == 0) {
             send_str(conn, "+PONG\r\n");
@@ -65,7 +67,7 @@ void *per_client(void *arg)
             send_resp_simple_string(conn, value);
         }
         else {
-            send_str(conn, "-ERR unknown command");
+            send_resp_simple_string(conn, "-ERR unknown command");
         }
 
         free_resp(cmd);
@@ -76,12 +78,14 @@ void *per_client(void *arg)
 
 static void handle_client(int conn)
 {
+    // printf("\ncreating pthread_t\n");
     pthread_t tid;
     if(pthread_create(&tid, NULL, per_client, (void *) (intptr_t) conn) != 0) {
         perror("pthread_create");
         close(conn);
     }
     pthread_detach(tid);
+    // printf("\npthread_detach\n");
 }
 
 int start_server(int port)
@@ -134,6 +138,7 @@ int start_server(int port)
         printf("Got a connection from %s:%d\n", client_ip, ntohs(address.sin_port));
 
         handle_client(conn);   // read / parse / reply until the client leaves
+        printf("\n\nClient accpeted async\n\n");
     }
 
     close(server_fd);   // unreachable — the server runs until killed
