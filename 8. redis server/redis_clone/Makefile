@@ -7,7 +7,7 @@ LIB_SRC := src/resp.c
 #   test_resp – runs the parser + command tests and EXITS (used for run/asan/leaks/check)
 #   server    – the TCP server (blocks forever in its accept loop)
 test_resp_SRCS := $(LIB_SRC) src/server.c tests/test_resp.c tests/test_server.c tests/test_run.c
-server_SRCS    := $(LIB_SRC) src/server.c src/server_main.c
+server_SRCS    := $(LIB_SRC) src/server.c src/server_main.c src/db.c
 
 # Which program run/asan/leaks/check act on. Override with:  make run BIN=server
 BIN ?= test_resp

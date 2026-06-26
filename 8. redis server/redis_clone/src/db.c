@@ -75,10 +75,22 @@ void undef(const char *key)
     }
 }
 
-// void db_set(const char *key, const char *value)
-// {
+void db_set(const char *key, const char *value)
+{
+    Entry *p = install(key, value);
+    if(p == NULL) {
+        perror("unable to set value");
+        exit(1);
+    }
+}
 
-// }
+const char * db_get(const char *key)
+{
+    Entry *p = lookup(key);
+    if(p == NULL)
+        return NULL;
+    return p->value;
+}
 
 
 

@@ -122,30 +122,24 @@ RespValue *resp_alloc_arr(int sz, enum resp_type type)
 
 RespValue *parse_array(const char *buf)
 {
-    RespValue *arr;
-    int arr_sz = 0, i = 0;
+    if(*buf != '*') return NULL;
+
     char *endptr;
-    while(*buf) {
-        if(*buf == '*') {
-            arr_sz = strtol(buf+1, &endptr, BASE_10);
-            buf = (endptr+2);
-            arr = resp_alloc_arr(arr_sz, ARRAYS);
-            if(arr_sz == -1) return arr; /* "*-1\r\n" represent Null Array */
-        }
-        else if(*buf == '$') {
-            int str_sz = strtol(buf+1, &endptr, BASE_10);
-            buf = endptr;
-            char *word = get_word(buf+2, str_sz);
-            buf += (2+str_sz+2);
-            
-            if(i >= arr_sz) {
-                perror("out of index");
-                exit(1);
-            }
-            arr->data.array.items[i++] = make_string(word);
-            free(word);
-        }
-        else ++buf;
+    int arr_sz = strtol(buf+1, &endptr, BASE_10);
+    buf = endptr + 2;
+
+    RespValue *arr = resp_alloc_arr(arr_sz, ARRAYS);
+    if(arr == NULL) return NULL;
+
+    for(int i = 0; i < arr_sz; i++) {
+        if(*buf != '$') break;
+        
+        int str_sz = strtol(buf+1, &endptr, BASE_10);
+        buf = endptr;
+        char *word = get_word(buf+2, str_sz);
+        buf += (2 + str_sz + 2);
+        arr->data.array.items[i] = make_string(word);
+        free(word);
     }
     return arr;
 }

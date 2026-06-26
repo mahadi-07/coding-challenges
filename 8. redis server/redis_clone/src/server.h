@@ -1,4 +1,6 @@
 #define SET "SET"
+#define GET "GET"
+#define CONFIG "GET"
 
 int start_server(int port);
 

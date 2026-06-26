@@ -6,22 +6,32 @@
 #include <arpa/inet.h>
 #include "server.h"
 #include "resp.h"
-#include <r_set.h>
+#include "db.h"
+#include <pthread.h>
 
 static void send_str(int conn, const char *s)
 {
     send(conn, s, strlen(s), 0);
 }
 
-/* Handle one client: read RESP commands and reply, until the client disconnects. */
-static void handle_client(int conn)
+static void send_resp_simple_string(int conn, const char *value)
 {
+    if (value != NULL) {
+        send_str(conn, "+");
+        send_str(conn, value);
+        send_str(conn, "\r\n");
+    } else
+        send_str(conn, "$-1\r\n");
+}
+
+void *per_client(void *arg)
+{
+    int conn = (int)(intptr_t)arg;
     char buffer[1024];
 
-    while (1) {
+    while(1) {
         ssize_t n = read(conn, buffer, sizeof(buffer) - 1);
-        if (n <= 0)
-            break;                       // client closed the connection
+        if (n <= 0) break;
         buffer[n] = '\0';
 
         printf("User given command [ %50s ]\n", buffer);
@@ -39,23 +49,39 @@ static void handle_client(int conn)
                 char *arg = cmd->data.array.items[1]->data.string;
                 char reply[2048];
                 int len = snprintf(reply, sizeof(reply), "$%zu\r\n%s\r\n",
-                                   strlen(arg), arg);           // bulk string
+                                    strlen(arg), arg);           // bulk string
                 send(conn, reply, len, 0);
             }
         }
-        else if(strcasecmp(cmd_name, "set") == 0) {
+        else if(strcasecmp(cmd_name, SET) == 0) {
             char *key = cmd->data.array.items[1]->data.string;
             char *value = cmd->data.array.items[2]->data.string;
-            send_str(conn, "+fsfsdfsdfsdf");
-            send_str(conn, "\r\n");
-
+            db_set(key, value);
+            send_resp_simple_string(conn, "OK");
+        }
+        else if(strcasecmp(cmd_name, GET) == 0) {
+            char *key = cmd->data.array.items[1]->data.string;
+            const char *value  = db_get(key);
+            send_resp_simple_string(conn, value);
         }
         else {
-            send_str(conn, "-\033[31mERR unknown command\r\n\033[0m");
+            send_str(conn, "-ERR unknown command");
         }
 
         free_resp(cmd);
     }
+    close(conn);
+    return NULL;
+}
+
+static void handle_client(int conn)
+{
+    pthread_t tid;
+    if(pthread_create(&tid, NULL, per_client, (void *) (intptr_t) conn) != 0) {
+        perror("pthread_create");
+        close(conn);
+    }
+    pthread_detach(tid);
 }
 
 int start_server(int port)
@@ -108,8 +134,6 @@ int start_server(int port)
         printf("Got a connection from %s:%d\n", client_ip, ntohs(address.sin_port));
 
         handle_client(conn);   // read / parse / reply until the client leaves
-
-        close(conn);
     }
 
     close(server_fd);   // unreachable — the server runs until killed
