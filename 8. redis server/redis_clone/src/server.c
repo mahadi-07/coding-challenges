@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include "server.h"
 #include "resp.h"
+#include <r_set.h>
 
 static void send_str(int conn, const char *s)
 {
@@ -25,13 +26,13 @@ static void handle_client(int conn)
 
         printf("User given command [ %50s ]\n", buffer);
         RespValue *cmd = parse(buffer);
-        printf("%s\n", resp_type_to_string(cmd->type));
+        // printf("%10s\n", resp_type_to_string(cmd->type));
 
-        char *name = cmd->data.array.items[0]->data.string;
+        char *cmd_name = cmd->data.array.items[0]->data.string;
 
-        if (strcasecmp(name, "PING") == 0) {
-            send_str(conn, "+PONG\r\n");                       // simple string
-        } else if (strcasecmp(name, "ECHO") == 0) {
+        if (strcasecmp(cmd_name, "PING") == 0) {
+            send_str(conn, "+PONG\r\n");
+        } else if (strcasecmp(cmd_name, "ECHO") == 0) {
             if (cmd->data.array.count < 2) {
                 send_str(conn, "-ERR wrong number of arguments for 'echo'\r\n");
             } else {
@@ -41,8 +42,16 @@ static void handle_client(int conn)
                                    strlen(arg), arg);           // bulk string
                 send(conn, reply, len, 0);
             }
-        } else {
-            send_str(conn, "-ERR unknown command\r\n");
+        }
+        else if(strcasecmp(cmd_name, "set") == 0) {
+            char *key = cmd->data.array.items[1]->data.string;
+            char *value = cmd->data.array.items[2]->data.string;
+            send_str(conn, "+fsfsdfsdfsdf");
+            send_str(conn, "\r\n");
+
+        }
+        else {
+            send_str(conn, "-\033[31mERR unknown command\r\n\033[0m");
         }
 
         free_resp(cmd);

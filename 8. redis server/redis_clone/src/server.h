@@ -1,3 +1,5 @@
+#define SET "SET"
+
 int start_server(int port);
 
 /* Execute one RESP command. Returns a malloc'd reply string (caller frees). */
