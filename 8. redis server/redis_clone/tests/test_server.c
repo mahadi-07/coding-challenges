@@ -53,3 +53,5 @@ void test_command_case_insensitive(void)
     free(r);
     TEST_PASSED("server: test_command_case_insensitive");
 }
+
+// redis-benchmark -t ping -q -n 1000 -c 10

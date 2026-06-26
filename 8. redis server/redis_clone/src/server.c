@@ -42,16 +42,15 @@ void *per_client(void *arg)
         
         printf("command name: %s\n", cmd_name);
 
-        if (strcasecmp(cmd_name, "PING") == 0) {
+        if (strcasecmp(cmd_name, "PING") == 0)
             send_str(conn, "+PONG\r\n");
-        } else if (strcasecmp(cmd_name, "ECHO") == 0) {
-            if (cmd->data.array.count < 2) {
+        else if (strcasecmp(cmd_name, "ECHO") == 0) {
+            if (cmd->data.array.count < 2)
                 send_str(conn, "-ERR wrong number of arguments for 'echo'\r\n");
-            } else {
+            else {
                 char *arg = cmd->data.array.items[1]->data.string;
                 char reply[2048];
-                int len = snprintf(reply, sizeof(reply), "$%zu\r\n%s\r\n",
-                                    strlen(arg), arg);           // bulk string
+                int len = snprintf(reply, sizeof(reply), "$%zu\r\n%s\r\n", strlen(arg), arg);
                 send(conn, reply, len, 0);
             }
         }
@@ -63,12 +62,12 @@ void *per_client(void *arg)
         }
         else if(strcasecmp(cmd_name, GET) == 0) {
             char *key = cmd->data.array.items[1]->data.string;
-            const char *value  = db_get(key);
+            char *value  = db_get(key);
             send_resp_simple_string(conn, value);
+            free(value);
         }
-        else {
+        else
             send_resp_simple_string(conn, "-ERR unknown command");
-        }
 
         free_resp(cmd);
     }

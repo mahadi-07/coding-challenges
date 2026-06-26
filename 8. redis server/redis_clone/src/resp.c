@@ -162,12 +162,11 @@ static RespValue *parse_inline(const char *buf)
     return make_string(tmp);
 }
 
-
 RespValue *parse(const char *buf)
 {
     char c = buf[0];
-    if (c != '+' && c != '-' && c != ':' && c != '$' && c != '*')
-        return parse_inline(buf);
+    // if (c != '+' && c != '-' && c != ':' && c != '$' && c != '*')
+    //     return parse_inline(buf);
 
     switch (get_identify_type(buf))
     {

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 typedef struct Entry Entry;
 struct Entry
@@ -12,6 +13,8 @@ struct Entry
 
 #define HASH_SIZE 1000
 static Entry *hashtab[HASH_SIZE];
+
+static pthread_mutex_t db_lock = PTHREAD_MUTEX_INITIALIZER;
 
 unsigned hash(const char *s) {
     unsigned long h = 5381;
@@ -77,19 +80,22 @@ void undef(const char *key)
 
 void db_set(const char *key, const char *value)
 {
+    pthread_mutex_lock(&db_lock);
     Entry *p = install(key, value);
+    pthread_mutex_unlock(&db_lock);
     if(p == NULL) {
         perror("unable to set value");
         exit(1);
     }
 }
 
-const char * db_get(const char *key)
+char * db_get(const char *key)
 {
+    pthread_mutex_lock(&db_lock);
     Entry *p = lookup(key);
-    if(p == NULL)
-        return NULL;
-    return p->value;
+    char *copy = (p == NULL) ? NULL : strdup(p->value);
+    pthread_mutex_unlock(&db_lock);
+    return copy;
 }
 
 
