@@ -4,15 +4,18 @@ CFLAGS  := -g -Wall -Wextra -std=c11
 # Two programs, each with its own main():
 #   test_resp – runs the parser + command tests and EXITS (used for run/asan/leaks/check)
 #   server    – the TCP server (blocks forever in its accept loop)
-test_resp_SRCS := src/resp.c \
+
+COMMON_SRCS := src/resp.c \
 	src/server.c \
 	src/utils.c \
+
+test_resp_SRCS := $(COMMON_SRCS) \
 	tests/test_db.c \
 	tests/test_resp.c \
 	tests/test_server.c \
 	tests/test_run.c
 
-server_SRCS    := src/resp.c src/server.c src/server_main.c src/db.c src/utils.c
+server_SRCS    := $(COMMON_SRCS) src/server_main.c src/db.c
 
 # Which program run/asan/leaks/check act on. Override with:  make run BIN=server
 BIN ?= test_resp
