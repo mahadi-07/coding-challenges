@@ -144,7 +144,37 @@ char *db_get(const char *key)
     return copy;
 }
 
+static Entry *get(const char *key)
+{
+    Entry *p = lookup(key);
+    return p;
+}
+
 bool db_del(const char *key)
 {
     return undef(key);
+}
+
+int db_incr(const char *key)
+{
+    pthread_mutex_lock(&db_lock);
+    Entry *p = get(key);
+    if(p == NULL)
+        p = install(key, "0", 0);
+    else {
+        char new_value[63];
+        snprintf(new_value, sizeof(new_value), "%d", atoi(p->value) + 1);
+        p = install(key, new_value, p->expires_at_ms);
+    }
+
+    if(p == NULL) {
+        perror("failed to save");
+        pthread_mutex_unlock(&db_lock);
+        return -1;
+    }
+
+    int i_val = atoi(p->value);
+    pthread_mutex_unlock(&db_lock);
+
+    return i_val;
 }

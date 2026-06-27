@@ -176,7 +176,7 @@ char *exec_command(const char *request)
     }
     else if(is_equal_ignore_case(cmd_name, INCR)) {
         char *key = cmd->data.array.items[1]->data.string;
-        db_incr(key);
+        reply = resp_integer(db_incr(key));
     }
     else {
         reply = resp_error("ERR unknown command");
