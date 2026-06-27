@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include "utils.h"
 
 typedef struct Entry Entry;
@@ -66,7 +67,7 @@ Entry *install(const char *key, const char *value, u_int64_t expires_at_ms)
     return p;
 }
 
-void undef(const char *key)
+bool undef(const char *key)
 {
     Entry *cur;
     Entry *prev = NULL;
@@ -80,10 +81,11 @@ void undef(const char *key)
             free(cur->key);
             free(cur->value);
             free(cur);
-            break;
+            return true;
         }
         prev = cur;
     }
+    return false;
 }
 
 void db_set(const char *key, const char *value)
@@ -140,4 +142,9 @@ char *db_get(const char *key)
 
     pthread_mutex_unlock(&db_lock);
     return copy;
+}
+
+bool db_del(const char *key)
+{
+    return undef(key);
 }

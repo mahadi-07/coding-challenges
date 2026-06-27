@@ -10,6 +10,7 @@
 #include "db.h"
 #include <pthread.h>
 #include "utils.h"
+#include <stdbool.h>
 
 static void send_str(int conn, const char *s)
 {
@@ -59,6 +60,11 @@ static char *resp_bulk(const char *s)
     return out;
 }
 
+bool is_equal_ignore_case(const char *a, const char *b)
+{
+    return strcasecmp(a, b) == 0;
+}
+
 char *exec_command(const char *request)
 {
     RespValue *cmd = parse(request);
@@ -72,14 +78,17 @@ char *exec_command(const char *request)
 
     if (cmd_name == NULL) {
         reply = resp_error("ERR unknown command");
-    } else if (strcasecmp(cmd_name, "PING") == 0) {
+    } 
+    else if (strcasecmp(cmd_name, "PING") == 0) {
         reply = resp_simple("PONG");
-    } else if (strcasecmp(cmd_name, "ECHO") == 0) {
+    } 
+    else if (strcasecmp(cmd_name, "ECHO") == 0) {
         if (cmd->type != ARRAYS || cmd->data.array.count < 2)
             reply = resp_error("ERR wrong number of arguments for 'echo'");
         else
             reply = resp_bulk(cmd->data.array.items[1]->data.string);
-    } else if (strcasecmp(cmd_name, SET) == 0) {
+    } 
+    else if (strcasecmp(cmd_name, SET) == 0) {
         if (cmd->type != ARRAYS || cmd->data.array.count < 3) {
             reply = resp_error("ERR wrong number of arguments for 'set'");
         } else {
@@ -133,7 +142,8 @@ char *exec_command(const char *request)
                 reply = resp_simple("OK");
             }
         }
-    } else if (strcasecmp(cmd_name, GET) == 0) {
+    } 
+    else if (strcasecmp(cmd_name, GET) == 0) {
         if (cmd->type != ARRAYS || cmd->data.array.count < 2)
             reply = resp_error("ERR wrong number of arguments for 'get'");
         else {
@@ -143,14 +153,32 @@ char *exec_command(const char *request)
             if(value != NULL)
                 free(value);
         }
-    } else if(strcasecmp(cmd_name, EXISTS) == 0) {
+    } 
+    else if(strcasecmp(cmd_name, EXISTS) == 0) {
         char *value = db_get(cmd->data.array.items[1]->data.string);
         if(value != NULL) {
             reply = resp_integer(1);
             free(value);
         }
         else reply = resp_integer(0);
-    } else {
+    }
+    else if(strcasecmp(cmd_name, DEL) == 0) {
+        int del_success = 0, to_del = cmd->data.array.count - 1;
+        for(int i = 1; i <= to_del; i++) {
+            char *key = cmd->data.array.items[i]->data.string;
+            del_success += (db_del(key) ? 1 : 0);
+        }
+
+        if(to_del == 1) 
+            reply = del_success ? resp_simple("OK") : resp_integer(0);
+        else
+            reply = resp_integer(del_success);
+    }
+    else if(is_equal_ignore_case(cmd_name, INCR)) {
+        char *key = cmd->data.array.items[1]->data.string;
+        db_incr(key);
+    }
+    else {
         reply = resp_error("ERR unknown command");
     }
 
