@@ -59,9 +59,6 @@ static char *resp_bulk(const char *s)
     return out;
 }
 
-/* Execute one RESP command. Pure logic — no sockets — so the unit tests and the
-   live server share exactly the same dispatch path. Returns a malloc'd reply
-   string (caller frees). */
 char *exec_command(const char *request)
 {
     RespValue *cmd = parse(request);
