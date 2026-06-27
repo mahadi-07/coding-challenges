@@ -13,6 +13,9 @@ void test_echo(void);
 void test_echo_empty(void);
 void test_unknown_command(void);
 void test_command_case_insensitive(void);
+void test_set_without_ttl(void);
+void test_get_without_ttl();
+void test_get_with_ttl();
 
 int run_db_tests(void);
 
@@ -30,8 +33,11 @@ int main(void)
     test_echo_empty();
     test_unknown_command();
     test_command_case_insensitive();
+    test_set_without_ttl();
+    test_get_without_ttl();
+    test_get_with_ttl();
 
-    /* DB (hash table) tests */
+    // /* DB (hash table) tests */
     int failed = run_db_tests();
 
     return failed > 0 ? 1 : 0;

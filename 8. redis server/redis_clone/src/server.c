@@ -18,6 +18,9 @@ static void send_str(int conn, const char *s)
 
 static char *resp_simple(const char *s)
 {
+    if (s == NULL)
+        return strdup("$-1\r\n"); /* nil bulk string */
+
     size_t n = strlen(s);
     char *out = malloc(n + 4); /* '+' s "\r\n" '\0' */
     snprintf(out, n + 4, "+%s\r\n", s);
@@ -26,6 +29,9 @@ static char *resp_simple(const char *s)
 
 static char *resp_error(const char *s)
 {
+    if (s == NULL)
+        return strdup("$-1\r\n"); /* nil bulk string */
+
     size_t n = strlen(s);
     char *out = malloc(n + 4); /* '-' s "\r\n" '\0' */
     snprintf(out, n + 4, "-%s\r\n", s);
@@ -69,7 +75,7 @@ char *exec_command(const char *request)
         if (cmd->type != ARRAYS || cmd->data.array.count < 3) {
             reply = resp_error("ERR wrong number of arguments for 'set'");
         } else {
-            char *key   = cmd->data.array.items[1]->data.string;
+            char *key = cmd->data.array.items[1]->data.string;
             char *value = cmd->data.array.items[2]->data.string;
 
             uint64_t expires_at_ms = DEFAULT_EXPIRES_AT_MS;
@@ -83,12 +89,16 @@ char *exec_command(const char *request)
                     strcasecmp(opt, "PX")   != 0 &&
                     strcasecmp(opt, "EXAT") != 0 &&
                     strcasecmp(opt, "PXAT") != 0) {
-                    err = "ERR syntax error"; ok = 0; break;
+                    err = "ERR syntax error";
+                    ok = 0;
+                    break;
                 }
 
                 /* each expiry flag is followed by exactly one integer */
-                if (i + 1 >= cmd->data.array.count) {
-                    err = "ERR syntax error"; ok = 0; break;
+                if (i+1 >= cmd->data.array.count) {
+                    err = "ERR syntax error";
+                    ok = 0;
+                    break;
                 }
 
                 char *end;
@@ -120,8 +130,8 @@ char *exec_command(const char *request)
             reply = resp_error("ERR wrong number of arguments for 'get'");
         else {
             char *value = db_get(cmd->data.array.items[1]->data.string);
-            reply = resp_bulk(value);   /* resp_bulk(NULL) -> "$-1\r\n" */
-            free(value);
+            reply = resp_bulk(value);
+            if(value != NULL) free(value);
         }
     } else {
         reply = resp_error("ERR unknown command");

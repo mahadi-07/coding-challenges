@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <assert.h>
 #include "../src/server.h"
 
@@ -52,6 +53,51 @@ void test_command_case_insensitive(void)
     assert(strcmp(r, "+PONG\r\n") == 0);
     free(r);
     TEST_PASSED("server: test_command_case_insensitive");
+}
+
+void test_set_without_ttl()
+{
+    char *msg = "*3\r\n$3\r\nSET\r\n$4\r\nname\r\n$5\r\nhasan\r\n";
+    char *r = exec_command(msg);
+    assert(strcmp(r, "+OK\r\n") == 0);
+    free(r);
+    TEST_PASSED("server: test_set_without_ttl");
+}
+
+void test_get_without_ttl()
+{
+    char *msg = "*3\r\n$3\r\nSET\r\n$4\r\nname\r\n$5\r\nhasan\r\n";
+    char *r = exec_command(msg);
+    assert(strcmp(r, "+OK\r\n") == 0);
+
+    msg = "*2\r\n$3\r\nget\r\n$4\r\nname\r\n";
+    r = exec_command(msg);
+    assert(strcmp(r, "$5\r\nhasan\r\n") == 0);
+
+    free(r);
+    TEST_PASSED("server: test_get_without_ttl");
+}
+
+void test_get_with_ttl()
+{
+    /* SET name=hasan with a 2-second TTL */
+      char *msg = "*5\r\n$3\r\nSET\r\n$4\r\nname\r\n$5\r\nhasan\r\n$2\r\nEX\r\n$1\r\n2\r\n";
+      char *r = exec_command(msg);
+      assert(strcmp(r, "+OK\r\n") == 0);
+      free(r);
+      
+      /* within the TTL, the value is still there */
+      r = exec_command("*2\r\n$3\r\nget\r\n$4\r\nname\r\n");
+      assert(strcmp(r, "$5\r\nhasan\r\n") == 0);
+      free(r);
+
+      /* once the TTL elapses, the key is gone -> nil bulk string */
+      sleep(3);
+      r = exec_command("*2\r\n$3\r\nget\r\n$4\r\nname\r\n");
+      assert(strcmp(r, "$-1\r\n") == 0);
+      free(r);
+
+      TEST_PASSED("server: test_get_with_ttl");
 }
 
 // redis-benchmark -t ping -q -n 1000 -c 10
