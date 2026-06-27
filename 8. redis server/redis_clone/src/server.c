@@ -175,8 +175,18 @@ char *exec_command(const char *request)
             reply = resp_integer(del_success);
     }
     else if(is_equal_ignore_case(cmd_name, INCR)) {
-        char *key = cmd->data.array.items[1]->data.string;
-        reply = resp_integer(db_incr(key));
+        if (cmd->type != ARRAYS || cmd->data.array.count < 2) {
+            reply = resp_error("ERR wrong number of arguments for 'incr'");
+        } else {
+            char *key = cmd->data.array.items[1]->data.string;
+            DbResult *db_result = db_incr(key);
+
+            if(!db_result->ok) reply = resp_error(db_result->error);
+            else reply = resp_integer(atoi(db_result->value));
+
+            free(db_result->value);   /* NULL on the error path -> safe to free */
+            free(db_result);
+        }
     }
     else {
         reply = resp_error("ERR unknown command");

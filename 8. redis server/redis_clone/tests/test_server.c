@@ -69,6 +69,7 @@ void test_get_without_ttl()
     char *msg = "*3\r\n$3\r\nSET\r\n$4\r\nname\r\n$5\r\nhasan\r\n";
     char *r = exec_command(msg);
     assert(strcmp(r, "+OK\r\n") == 0);
+    free(r);   /* don't leak the SET reply before reusing r */
 
     msg = "*2\r\n$3\r\nget\r\n$4\r\nname\r\n";
     r = exec_command(msg);
