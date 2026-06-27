@@ -12,6 +12,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "../src/db.c"
+#include "../src/server.h"
 
 static int failures = 0;
 
@@ -32,11 +33,11 @@ static const char *val(const char *key)
 static void test_install_and_lookup(void)
 {
     printf("[install + lookup]\n");
-    install("name", "John");
+    install("name", "John", DEFAULT_EXPIRES_AT_MS);
     CHECK(val("name") && strcmp(val("name"), "John") == 0, "single key stored");
 
-    install("city", "Dhaka");
-    install("lang", "C");
+    install("city", "Dhaka", DEFAULT_EXPIRES_AT_MS);
+    install("lang", "C", DEFAULT_EXPIRES_AT_MS);
     CHECK(val("city") && strcmp(val("city"), "Dhaka") == 0, "second key stored");
     CHECK(val("lang") && strcmp(val("lang"), "C") == 0,     "third key stored");
     CHECK(val("missing-key") == NULL, "missing key returns NULL");
@@ -45,9 +46,9 @@ static void test_install_and_lookup(void)
 static void test_update(void)
 {
     printf("[update existing key]\n");
-    install("upd", "1");
-    install("upd", "2");
-    install("upd", "3");
+    install("upd", "1", DEFAULT_EXPIRES_AT_MS);
+    install("upd", "2", DEFAULT_EXPIRES_AT_MS);
+    install("upd", "3", DEFAULT_EXPIRES_AT_MS);
     CHECK(val("upd") && strcmp(val("upd"), "3") == 0,
           "repeated install updates value, not duplicates the node");
 }
@@ -61,7 +62,7 @@ static void test_collisions(void)
     for (int i = 0; i < 3000; i++) {
         snprintf(key, sizeof(key), "key:%d", i);
         snprintf(v,    sizeof(v),    "val:%d", i);
-        install(key, v);
+        install(key, v, DEFAULT_EXPIRES_AT_MS);
     }
     int ok = 1;
     for (int i = 0; i < 3000; i++) {
@@ -78,8 +79,8 @@ static void test_collisions(void)
 static void test_undef_basic(void)
 {
     printf("[undef basic]\n");
-    install("keep", "yes");
-    install("gone", "no");
+    install("keep", "yes", DEFAULT_EXPIRES_AT_MS);
+    install("gone", "no", DEFAULT_EXPIRES_AT_MS);
     CHECK(val("gone") != NULL, "key exists before undef");
 
     undef("gone");
@@ -100,7 +101,7 @@ static void test_undef_kept_keys_survive(void)
     for (int i = 0; i < N; i++) {
         snprintf(key, sizeof(key), "del:%d", i);
         snprintf(v,    sizeof(v),    "val:%d", i);
-        install(key, v);
+        install(key, v, DEFAULT_EXPIRES_AT_MS);
     }
     /* remove every even key; many will be mid-chain */
     for (int i = 0; i < N; i += 2) {
@@ -121,8 +122,9 @@ static void test_undef_kept_keys_survive(void)
     CHECK(ok, "removed keys gone, kept keys intact (no chain corruption)");
 }
 
-int main(void)
+int run_db_tests(void)
 {
+    failures = 0;
     test_install_and_lookup();
     test_update();
     test_collisions();
@@ -130,11 +132,11 @@ int main(void)
     test_undef_kept_keys_survive();
 
     if (failures == 0) {
-        printf("\nALL TESTS PASSED\n");
+        printf("[db] ALL TESTS PASSED\n");
         return 0;
     }
-    printf("\n%d CHECK(S) FAILED\n", failures);
-    return 1;
+    printf("[db] %d CHECK(S) FAILED\n", failures);
+    return failures;
 }
 
 
