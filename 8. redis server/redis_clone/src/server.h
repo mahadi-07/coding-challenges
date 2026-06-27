@@ -1,5 +1,6 @@
 #define SET "SET"
 #define GET "GET"
+#define EXISTS "EXISTS"
 
 #define DEFAULT_EXPIRES_AT_MS 0 /* 0 = no expiry (plain SET) */
 

@@ -27,6 +27,17 @@ static char *resp_simple(const char *s)
     return out;
 }
 
+static char *resp_integer(const int i_val)
+{
+    int len = snprintf(NULL, 0, ":%d\r\n", i_val);
+    char *out = malloc(len + 1);
+    if (out == NULL)
+        return NULL;
+
+    snprintf(out, len + 1, ":%d\r\n", i_val);
+    return out;
+}
+
 static char *resp_error(const char *s)
 {
     if (s == NULL)
@@ -131,8 +142,17 @@ char *exec_command(const char *request)
         else {
             char *value = db_get(cmd->data.array.items[1]->data.string);
             reply = resp_bulk(value);
-            if(value != NULL) free(value);
+
+            if(value != NULL)
+                free(value);
         }
+    } else if(strcasecmp(cmd_name, EXISTS) == 0) {
+        char *value = db_get(cmd->data.array.items[1]->data.string);
+        if(value != NULL) {
+            reply = resp_integer(1);
+            free(value);
+        }
+        else reply = resp_integer(0);
     } else {
         reply = resp_error("ERR unknown command");
     }
@@ -150,6 +170,8 @@ void *per_client(void *arg)
         ssize_t n = read(conn, buffer, sizeof(buffer) - 1);
         if (n <= 0) break;
         buffer[n] = '\0';
+
+        printf("User input message : %s\n\n\n", buffer);
 
         char *reply = exec_command(buffer);   /* parse + dispatch + format */
         send_str(conn, reply);
