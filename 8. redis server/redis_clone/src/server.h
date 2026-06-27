@@ -1,6 +1,8 @@
 #define SET "SET"
 #define GET "GET"
 
+#define DEFAULT_EXPIRES_AT_MS 0 /* 0 = no expiry (plain SET) */
+
 int start_server(int port);
 
 /* Execute one RESP command. Returns a malloc'd reply string (caller frees). */

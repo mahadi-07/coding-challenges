@@ -1,0 +1,1 @@
+uint64_t now_ms(void);

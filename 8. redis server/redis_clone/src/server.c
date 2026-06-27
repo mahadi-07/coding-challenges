@@ -8,6 +8,7 @@
 #include "resp.h"
 #include "db.h"
 #include <pthread.h>
+#include "utils.h"
 
 static void send_str(int conn, const char *s)
 {
@@ -55,10 +56,56 @@ void *per_client(void *arg)
             }
         }
         else if(strcasecmp(cmd_name, SET) == 0) {
-            char *key = cmd->data.array.items[1]->data.string;
-            char *value = cmd->data.array.items[2]->data.string;
-            db_set(key, value);
-            send_resp_simple_string(conn, "OK");
+            if(cmd->data.array.count < 3) {
+                send_str(conn, "-ERR wrong number of arguments for 'set'\r\n");
+            }
+            else {
+                char *key = cmd->data.array.items[1]->data.string;
+                char *value = cmd->data.array.items[2]->data.string;
+
+                uint64_t expires_at_ms = DEFAULT_EXPIRES_AT_MS;
+                const char *err = NULL;
+                int ok = 1;
+                
+                for(int i = 3; i < cmd->data.array.count; i++) {
+                    char *opt = cmd->data.array.items[i]->data.string;
+                    
+                    if(strcasecmp(opt, "EX")   != 0 &&
+                        strcasecmp(opt, "PX")   != 0 &&
+                        strcasecmp(opt, "EXAT") != 0 &&
+                        strcasecmp(opt, "PXAT") != 0) {
+                        err = "-ERR syntax error\r\n"; ok = 0; break;
+                    }
+
+                    /* each expiry flag is followed by exactly one integer */
+                    if(i + 1 >= cmd->data.array.count) {
+                        err = "-ERR syntax error\r\n"; ok = 0; break;
+                    }
+
+                    char *end;
+                    long long n = strtoll(cmd->data.array.items[++i]->data.string, &end, 10);
+                    if(*end != '\0' || n <= 0) {
+                        err = "-ERR value is not an integer or out of range\r\n"; ok = 0;
+                        break;
+                    }
+
+                    if(strcasecmp(opt, "EX") == 0)
+                        expires_at_ms = now_ms() + (uint64_t)n * 1000;
+                    else if(strcasecmp(opt, "PX")   == 0)
+                        expires_at_ms = now_ms() + (uint64_t)n;
+                    else if(strcasecmp(opt, "EXAT") == 0)
+                        expires_at_ms = (uint64_t)n * 1000;
+                    else
+                        expires_at_ms = (uint64_t)n;
+                }
+
+                if(!ok)
+                    send_str(conn, err);
+                else {
+                    db_set_ex(key, value, expires_at_ms);
+                    send_str(conn, "+OK\r\n");
+                }
+            }
         }
         else if(strcasecmp(cmd_name, GET) == 0) {
             char *key = cmd->data.array.items[1]->data.string;
