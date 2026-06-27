@@ -1,0 +1,1 @@
+char *set(const char *key, const char *value);
