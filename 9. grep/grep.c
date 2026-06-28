@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <ctype.h>
 #include <sys/stat.h>
 
 #define MAX_PATH_LENGTH 1000
@@ -104,7 +105,28 @@ int main(int argc, char *argv[])
     enum Type type = ALL;
     int matched_line_count = 0;
     while((fgets(buf, sizeof(buf), fp)) != NULL) {
-        if(strcmp(opt, "-v") == 0) {
+        if(strcmp(opt, "\\d") == 0) {
+            int digit = 0;
+            for(int i = 0; buf[i] != '\0'; i++) {
+                if(isdigit(buf[i])) {
+                    digit = 1;
+                    break;
+                }
+            }
+            if(digit) printf("%s", buf);
+        }
+        else if(strcmp(opt, "\\w") == 0) {
+            int non_char = 0;
+            for(int i = 0; buf[i] != '\0'; i++) {
+                if(buf[i] == '\n' || buf[i] == ' ' || buf[i] == '\t') continue;
+                if(!isalpha(buf[i])) {
+                    non_char = 1;
+                    break;
+                }
+            }
+            if(!non_char) printf("%s", buf);
+        }
+        else if(strcmp(opt, "-v") == 0) {
             if (strstr(buf, argv[2]) == NULL) {
                 printf("%s", buf);
             }
