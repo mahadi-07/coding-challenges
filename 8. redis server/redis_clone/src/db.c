@@ -2,37 +2,34 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include "utils.h"
-
-typedef struct Entry Entry;
-struct Entry
-{
-    char *key;
-    char *value;
-    u_int64_t expires_at_ms;
-    struct Entry *next;
-};
+#include "db.h"     /* public API; also pulls in db_dto.h (Entry, DbResult) */
 
 #define HASH_SIZE 1000
 static Entry *hashtab[HASH_SIZE];
 
 static pthread_mutex_t db_lock = PTHREAD_MUTEX_INITIALIZER;
 
+/* djb2 string hash, folded into the table size. */
 unsigned hash(const char *s) {
     unsigned long h = 5381;
-    
+
     int c;
     while ((c = (unsigned char)*s++))
         h = ((h << 5) + h) + c;
-    
+
     return h % HASH_SIZE;
 }
 
+/* True if e's TTL has already elapsed. expires_at_ms == 0 means "no expiry",
+   so a zero TTL never reads as expired even when now_ms() is large. */
 static int expired(const Entry *e)
 {
     return e->expires_at_ms != 0 && e->expires_at_ms <= now_ms();
 }
 
+/* Return the entry associated with `key`, or NULL if it does not exist. */
 Entry *lookup(const char *key)
 {
     Entry *p;
@@ -43,22 +40,30 @@ Entry *lookup(const char *key)
     return p;
 }
 
-Entry *install(const char *key, const char *value, u_int64_t expires_at_ms)
+/*
+ * Insert or update an entry.
+ *
+ * Replaces any existing value and expiration time. The caller must hold
+ * db_lock.
+ *
+ * Returns the updated entry, or NULL on allocation failure.
+ */
+Entry *install(const char *key, const char *value, uint64_t expires_at_ms)
 {
     Entry *p;
     if((p = lookup(key)) == NULL) {
         p = malloc(sizeof(Entry));
-        
+
         if((p->key = strdup(key)) == NULL)
             return NULL;
-        
+
         unsigned long hashval = hash(p->key);
         p->next = hashtab[hashval];
         hashtab[hashval] = p;
     }
     else
         free(p->value);
-    
+
     if((p->value = strdup(value)) == NULL)
         return NULL;
 
@@ -66,13 +71,20 @@ Entry *install(const char *key, const char *value, u_int64_t expires_at_ms)
     return p;
 }
 
-void undef(const char *key)
+/*
+ * Remove the entry associated with `key`.
+ *
+ * Frees all memory owned by the entry. The caller must hold db_lock.
+ *
+ * Returns true if an entry was removed; otherwise false.
+ */
+bool undef(const char *key)
 {
     Entry *cur;
     Entry *prev = NULL;
     for(cur = hashtab[hash(key)]; cur != NULL; cur = cur->next) {
         if(strcmp(cur->key, key) == 0) {
-            if(prev == NULL) /* Need to remove first entry */
+            if(prev == NULL)
                 hashtab[hash(cur->key)] = cur->next;
             else
                 prev->next = cur->next;
@@ -80,10 +92,11 @@ void undef(const char *key)
             free(cur->key);
             free(cur->value);
             free(cur);
-            break;
+            return true;
         }
         prev = cur;
     }
+    return false;
 }
 
 void db_set(const char *key, const char *value)
@@ -103,36 +116,20 @@ void db_set_ex(const char *key, const char *value, uint64_t expires_at_ms)
    pthread_mutex_unlock(&db_lock);
 
    if(p == NULL)
-        perror("unable to set value");
+       perror("unable to set value");
 }
 
-/**
- * @brief Retrieves the value associated with the specified key.
- *
- * Looks up the given key in the database. If the key exists and has not
- * expired, a newly allocated copy of its value is returned. If the key does
- * not exist or has expired, NULL is returned.
- *
- * @param key The key to retrieve.
- *
- * @return A newly allocated copy of the value associated with the key, or
- *         NULL if the key does not exist or has expired.
- *
- * @note The returned string is allocated with `strdup()`. The caller owns
- *       the returned memory and is responsible for freeing it with `free()`
- *       when it is no longer needed.
- */
 char *db_get(const char *key)
 {
     pthread_mutex_lock(&db_lock);
     Entry *p = lookup(key);
-    
+
     char *copy;
 
     if(p == NULL)
         copy = NULL;
     else if(expired(p)) {
-        undef(p->key);
+        undef(p->key);   /* lazy delete on read */
         copy = NULL;
     }
     else
@@ -140,4 +137,54 @@ char *db_get(const char *key)
 
     pthread_mutex_unlock(&db_lock);
     return copy;
+}
+
+static Entry *get(const char *key)
+{
+    Entry *p = lookup(key);
+    return p;
+}
+
+bool db_del(const char *key)
+{
+    return undef(key);
+}
+
+DbResult *db_incr(const char *key)
+{
+    pthread_mutex_lock(&db_lock);
+    DbResult *res = malloc(sizeof(DbResult));
+    res->value = NULL;   /* NULL until success, so the caller can free() unconditionally */
+    res->error = NULL;
+
+    Entry *p = get(key);
+    if(p == NULL)
+        p = install(key, "1", 0);   /* missing key: Redis seeds 0 then +1 -> 1 */
+    else {
+        if(!is_number(p->value)) {
+            pthread_mutex_unlock(&db_lock);
+
+            res->ok = false;
+            res->error = "value is not an integer or out of range";
+            return res;
+        }
+
+        char new_value[63];
+        snprintf(new_value, sizeof(new_value), "%d", atoi(p->value) + 1);
+        p = install(key, new_value, p->expires_at_ms);
+    }
+
+    if(p == NULL) {
+        pthread_mutex_unlock(&db_lock);
+
+        res->ok = false;
+        res->error = "failed to save";
+        return res;
+    }
+
+    res->ok = true;
+    res->value = strdup(p->value);
+    pthread_mutex_unlock(&db_lock);
+
+    return res;
 }
