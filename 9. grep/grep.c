@@ -105,7 +105,13 @@ int main(int argc, char *argv[])
     enum Type type = ALL;
     int matched_line_count = 0;
     while((fgets(buf, sizeof(buf), fp)) != NULL) {
-        if(strcmp(opt, "\\d") == 0) {
+        if(opt[0] == '^') {
+            char *prefix = opt+1;
+            if(strncmp(buf, prefix, strlen(prefix)) == 0) {
+                printf("%s", buf);
+            }
+        }
+        else if(strcmp(opt, "\\d") == 0) {
             int digit = 0;
             for(int i = 0; buf[i] != '\0'; i++) {
                 if(isdigit(buf[i])) {
@@ -161,6 +167,12 @@ int main(int argc, char *argv[])
     return 0;
 }
 // grep "" data/x.txt | diff data/y.txt -
+
 // ./grep_ "" data/x.txt | diff data/y.txt -
+
 // ./grep_ J data/rockbands.txt
 // echo $?
+
+// ./grep_ "\w" ./data/symbols.txt
+
+// ./grep_ ^A ./data/rockbands.txt
