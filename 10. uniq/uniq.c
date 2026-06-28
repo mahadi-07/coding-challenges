@@ -5,40 +5,50 @@
 
 int main(int argc, char *argv[])
 {
-    FILE *fp = NULL;
-    FILE *fp_out = NULL;
+    FILE *fp = stdin;
+    FILE *fp_out = stdout;
 
     int print_count = 0;
     int repeated_lines_only = 0;
     int unique_lines_only = 0;
-    if(argc > 1) {
-        if(strcmp(argv[1], "-c") == 0 || strcmp(argv[1], "--count") == 0) {
+    char *input_file_path = NULL;
+    char *output_file_path = NULL;
+
+    for(int i = 1; i < argc; i++) {
+        if(strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--count") == 0)
             print_count = 1;
-            fp = fopen(argv[2], "r");
-        }
-        else if(strcmp(argv[1], "-d") == 0 || strcmp(argv[1], "--repeated") == 0) {
+        else if(strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--repeated") == 0)
             repeated_lines_only = 1;
-            fp = fopen(argv[2], "r");
-        }
-        else if(strcmp(argv[1], "-u") == 0) {
+        else if(strcmp(argv[i], "-u") == 0) 
             unique_lines_only = 1;
-            fp = fopen(argv[2], "r");
-        }
         else if(strcmp(argv[1], "-") == 0) {
-            fp = stdin;
-            if(argc >= 3) {
-                fp_out = fopen(argv[2], "wb");
-                if(fp_out == NULL)
-                    return 1;
-            }
+            if (i + 1 < argc)
+                output_file_path = argv[++i];
         }
-        else
-            fp = fopen(argv[1], "r");
-        
-        
+        else {
+            /* First non-option is the input file. */
+            if (input_file_path == NULL)
+                input_file_path = argv[i];
+        }
     }
-    else
-        fp = stdin;
+
+
+    if (input_file_path != NULL) {
+        fp = fopen(input_file_path, "r");
+        if (fp == NULL) {
+            perror(input_file_path);
+            return 1;
+        }
+    }
+
+    if (output_file_path != NULL) {
+        fp_out = fopen(output_file_path, "wb");
+        if (fp_out == NULL) {
+            perror(output_file_path);
+            fclose(fp);
+            return 1;
+        }
+    }
 
     char buf[MAX_LEN] = {0};
     char prev[MAX_LEN] = {0};
@@ -79,9 +89,8 @@ int main(int argc, char *argv[])
         if(repeated_lines_only) should_print = count > 1;
         if(unique_lines_only) should_print = (count == 1);
         if(should_print) {
-            if(print_count) {
-                if(count > 1) printf("%3d %s", count, prev);
-            }
+            if(print_count)
+                printf("%3d %s", count, prev);
             else
                 printf("%s", prev);
         }

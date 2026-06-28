@@ -40,6 +40,12 @@ step-5: build
 	./$(TARGET) -u ./data/test.txt
 	$(MAKE) clean
 
+step-6.1: build
+	./$(TARGET) -c -d ./data/test.txt
+
+step-6.2: build
+	./$(TARGET) -c -u ./data/test.txt
+
 clean:
 	rm -f $(TARGET)
 	rm -rf uniq.dSYM
