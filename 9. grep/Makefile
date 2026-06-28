@@ -14,3 +14,7 @@ step-2:
 
 step-3:
 	./$(TARGET) -r "Nirvana" ./data
+
+clean:
+	rm -rf grep_.dSYM
+	rm grep_
