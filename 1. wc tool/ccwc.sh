@@ -66,7 +66,7 @@ bytes=0
 chars=0
 in_word=false
 
-while IFS= read -r line || [[ -n "$line" ]]; do
+while IFS= read -r line; do
   lines=$((lines + 1))
 done < "$input_buffer"
 
