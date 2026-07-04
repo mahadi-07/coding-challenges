@@ -7,11 +7,12 @@
 #include <dirent.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <termios.h>
 
 #define MAX_HISTORY 1000
 
 char *history[MAX_HISTORY] = {0};
-int history_count = 0;
+int hidx = 0, h_scroll = 0;
 
 char *get_h_path()
 {
@@ -29,13 +30,14 @@ void history_load()
     char *h_path = get_h_path();
     FILE *fp = fopen(h_path, "r");
     
-    history_count = 0;
+    hidx = 0;
     if(fp != NULL) {
         char line[1024];
         while (fgets(line, sizeof(line), fp) != NULL)
-            history[history_count++] = strdup(line);
+            history[hidx++] = strdup(line);
         free(h_path);
     }
+    h_scroll = hidx;
 }
 
 int get_hfd()
@@ -123,7 +125,7 @@ void execute_cmd(char *cmd)
 
     if(strcasecmp(args[0], "history") == 0) {
         int seq_no = 1;
-        for(int i = 0; i < history_count; i++)
+        for(int i = 0; i < hidx; i++)
             printf("%5d\t%s", seq_no++, history[i]);
         return;
     }
@@ -211,15 +213,105 @@ char **extract_segments(const char *cmd)
     return segments;
 }
 
-int main()
+/**
+ * - Turning on raw mode
+ * - Reading one character at a time
+ */
+
+struct termios original;
+
+/* Restore the terminal before existing */
+void disable_raw_mode()
 {
-    history_load();
+    tcsetattr(STDIN_FILENO, TCSANOW, &original);
+}
 
-    signal(SIGINT, SIG_IGN);
+/* Enable raw mode */
+void enable_raw_mode()
+{
+    tcgetattr(STDIN_FILENO, &original);
 
-    printf("ccsh>");
-    char buf[1000] = {};
-    while(fgets(buf, sizeof(buf), stdin) != NULL) {
+    struct termios raw = original;
+
+    // disable canonical mode (dont wait for Enter)
+    // disable echo (terminal won't print characters)
+    raw.c_lflag &= ~(ECHO | ICANON);
+    
+    tcsetattr(STDIN_FILENO, TCSANOW, &raw);
+}
+
+char *_fgets(char *buf, int sz, int fd)
+{
+    int len = 0;
+    char c;
+
+    while(1) {
+        ssize_t n = read(fd, &c, 1);
+        if (n <= 0) 
+            return NULL;
+
+        /* user pressed enter */
+        if(c == '\n' || len >= sz)
+            break;
+
+        /* backspace (127 on most terminals) */
+        if(c == 127) {
+            if(len > 0) {
+                len--;
+                // move left, erase character, move left again
+                write(STDOUT_FILENO, "\b \b", 3);
+            }
+            continue;
+        }
+
+        if(c == 27) {
+            char second;
+            char third;
+
+            read(STDIN_FILENO, &second, 1);
+            read(STDIN_FILENO, &third, 1);
+
+            if(second == '[') {
+                switch (third)
+                {
+                    case 'A':
+                        if(h_scroll > 0) {
+                            --h_scroll;
+                            write(1, history[h_scroll], strlen(history[h_scroll]));
+                        }
+                        break;
+                    
+                    case 'B':
+                        printf("\nDOWN\n");
+                        break;
+                    
+                    case 'C':
+                        printf("\nRIGHT\n");
+                        break;
+
+                    case 'D':
+                        printf("\nLEFT\n");
+                        break;
+                }
+            }
+            continue;
+        }
+
+        buf[len++] = c;
+
+        write(STDOUT_FILENO, &c, 1);
+    }
+    buf[len] = '\0';
+    write(STDOUT_FILENO, "\n", 1);
+
+    return buf;
+}
+
+void process_input()
+{
+    write(1, "\nccsh>", 6);
+    char buf[1024] = {};
+    while(_fgets(buf, sizeof(buf), 0) != NULL) {
         char *cmd = trim(buf);
         if(cmd != NULL) {            
             history_add(cmd);
@@ -228,18 +320,25 @@ int main()
                 break;
 
             char **segments = extract_segments(cmd);
-            free(cmd);
-
             handle_cmd(segments);
             
+            free(cmd);
             free(segments);
         }
-
-        printf("\nccsh>");
+        write(1, "\nccsh>", 6);
     }
 }
 
+int main()
+{
+    history_load();
+    signal(SIGINT, SIG_IGN);
 
+    enable_raw_mode();
+    process_input();
+    disable_raw_mode();
+    return 0;
+}
 
 // step-6
 // cat ./data/t.txt | uniq | wc -l
