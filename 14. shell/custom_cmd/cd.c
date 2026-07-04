@@ -25,7 +25,6 @@ char *trim_spaces_newlines(char *cmd)
 
 int cd(const char *tdir)
 {
-    printf("%s\n", tdir);
     if(tdir == NULL || strcmp(tdir, "~") == 0)
         tdir = getenv("HOME");
     

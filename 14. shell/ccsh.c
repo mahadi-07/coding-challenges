@@ -12,7 +12,7 @@
 #define MAX_HISTORY 1000
 
 char *history[MAX_HISTORY] = {0};
-int hidx = 0, h_scroll = 0;
+int hc = 0, hsp = 0;
 
 char *get_h_path()
 {
@@ -30,14 +30,14 @@ void history_load()
     char *h_path = get_h_path();
     FILE *fp = fopen(h_path, "r");
     
-    hidx = 0;
+    hc = 0;
     if(fp != NULL) {
         char line[1024];
         while (fgets(line, sizeof(line), fp) != NULL)
-            history[hidx++] = strdup(line);
+            history[hc++] = strdup(line);
         free(h_path);
     }
-    h_scroll = hidx;
+    hsp = hc;
 }
 
 int get_hfd()
@@ -114,6 +114,14 @@ char **build_args(char *cmd)
     return v;
 }
 
+void free_args(char **args)
+{
+    if(args == NULL) return;
+    for(int i = 0; args[i] != NULL; i++)
+        free(args[i]);
+    free(args);
+}
+
 int is_cd_cmd(char **args)
 {
     return strcmp(args[0], "cd") == 0;
@@ -125,7 +133,7 @@ void execute_cmd(char *cmd)
 
     if(strcasecmp(args[0], "history") == 0) {
         int seq_no = 1;
-        for(int i = 0; i < hidx; i++)
+        for(int i = 0; i < hc; i++)
             printf("%5d\t%s", seq_no++, history[i]);
         return;
     }
@@ -187,7 +195,7 @@ void handle_cmd(char **segments)
 
 char **extract_segments(const char *cmd)
 {
-    char **segments = malloc(sizeof(16) * sizeof(char *));
+    char **segments = malloc(16 * sizeof(char *));
     int seg_count = 0;
 
     char part[128];
@@ -235,20 +243,48 @@ void enable_raw_mode()
 
     // disable canonical mode (dont wait for Enter)
     // disable echo (terminal won't print characters)
-    raw.c_lflag &= ~(ECHO | ICANON);
+    // disable signal generation (ISIG) so CTRL-C is read as the byte 0x03
+    //   instead of the kernel raising SIGINT
+    raw.c_lflag &= ~(ECHO | ICANON | ISIG);
     
     tcsetattr(STDIN_FILENO, TCSANOW, &raw);
 }
 
+void redraw_line(const char *buf, int len)
+{
+    write(STDOUT_FILENO, "\r", 1);          // back to column 0
+    write(STDOUT_FILENO, "ccsh>", 5);       // prompt
+    write(STDOUT_FILENO, "\033[K", 3);      // clear from cursor to end of line
+    if(len > 0)
+        write(STDOUT_FILENO, buf, len);     // current line text
+}
+
+int load_hist_into(char *buf, const char *item)
+{
+    int n = strlen(item);
+    if(n > 0 && item[n - 1] == '\n') n--;
+    memcpy(buf, item, n);
+    buf[n] = '\0';
+    return n;
+}
+
 char *_fgets(char *buf, int sz, int fd)
 {
+    enable_raw_mode();
+
+    char draft[1024]; // line typed before the first UP
+    int draft_len = 0;
+    int hpos = hc;
+
     int len = 0;
     char c;
 
     while(1) {
         ssize_t n = read(fd, &c, 1);
-        if (n <= 0) 
+        if (n <= 0) {
+            disable_raw_mode();
             return NULL;
+        }
 
         /* user pressed enter */
         if(c == '\n' || len >= sz)
@@ -264,6 +300,18 @@ char *_fgets(char *buf, int sz, int fd)
             continue;
         }
 
+        /* CTRL-C (0x03): abandon the current line and refresh the prompt.
+         *   - print ^C and a fresh prompt, like a real shell
+         *   - reset the line buffer and the history-navigation state */
+        if(c == 3) {
+            write(STDOUT_FILENO, "^C", 2);
+            write(STDOUT_FILENO, "\nccsh>", 6);
+            len = 0;
+            draft_len = 0;
+            hpos = hc;
+            continue;
+        }
+
         if(c == 27) {
             char second;
             char third;
@@ -274,23 +322,34 @@ char *_fgets(char *buf, int sz, int fd)
             if(second == '[') {
                 switch (third)
                 {
-                    case 'A':
-                        if(h_scroll > 0) {
-                            --h_scroll;
-                            write(1, history[h_scroll], strlen(history[h_scroll]));
+                    case 'A': // UP
+                        if(hpos > 0) {
+                            if(hpos == hc) {        /* leaving the draft: save what's typed */
+                                memcpy(draft, buf, len);
+                                draft_len = len;
+                            }
+                            hpos--;
+                            len = load_hist_into(buf, history[hpos]);
+                            redraw_line(buf, len);
                         }
                         break;
                     
-                    case 'B':
-                        printf("\nDOWN\n");
+                    case 'B': // DOWN
+                        if(hpos < hc) {
+                            hpos++;
+                            if(hpos == hc) { /* back to the draft slot */
+                                memcpy(buf, draft, draft_len);
+                                len = draft_len;
+                                buf[len] = '\0';
+                            } else {
+                                len = load_hist_into(buf, history[hpos]);
+                            }
+                            redraw_line(buf, len);
+                        }
                         break;
                     
                     case 'C':
-                        printf("\nRIGHT\n");
-                        break;
-
                     case 'D':
-                        printf("\nLEFT\n");
                         break;
                 }
             }
@@ -299,11 +358,12 @@ char *_fgets(char *buf, int sz, int fd)
 
         buf[len++] = c;
 
-        write(STDOUT_FILENO, &c, 1);
+        if(c != '\n') write(STDOUT_FILENO, &c, 1);
     }
     buf[len] = '\0';
     write(STDOUT_FILENO, "\n", 1);
 
+    disable_raw_mode();
     return buf;
 }
 
@@ -319,11 +379,19 @@ void process_input()
             if(strcasecmp(cmd, "exit") == 0)
                 break;
 
-            char **segments = extract_segments(cmd);
-            handle_cmd(segments);
-            
+            char **args = build_args(cmd);
+            if(is_cd_cmd(args)) {
+                /* cd is a builtin: a child's chdir can't affect the shell,
+                 * so it must run here, in the parent process. */
+                exec_cd(args[1]);
+            } else {
+                char **segments = extract_segments(cmd);
+                handle_cmd(segments);
+                free(segments);
+            }
+            free_args(args);
+
             free(cmd);
-            free(segments);
         }
         write(1, "\nccsh>", 6);
     }
@@ -333,10 +401,7 @@ int main()
 {
     history_load();
     signal(SIGINT, SIG_IGN);
-
-    enable_raw_mode();
     process_input();
-    disable_raw_mode();
     return 0;
 }
 
