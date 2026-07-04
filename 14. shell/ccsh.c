@@ -6,6 +6,63 @@
 #include <sys/wait.h>
 #include <dirent.h>
 #include <signal.h>
+#include <fcntl.h>
+
+#define MAX_HISTORY 1000
+
+char *history[MAX_HISTORY] = {0};
+int history_count = 0;
+
+char *get_h_path()
+{
+    char h_path[100];
+
+    snprintf(h_path, sizeof(h_path),
+             "%s/%s",
+             getenv("HOME"),
+             ".ccsh_history");
+    return strdup(h_path);
+}
+
+void history_load()
+{
+    char *h_path = get_h_path();
+    FILE *fp = fopen(h_path, "r");
+    
+    history_count = 0;
+    if(fp != NULL) {
+        char line[1024];
+        while (fgets(line, sizeof(line), fp) != NULL)
+            history[history_count++] = strdup(line);
+        free(h_path);
+    }
+}
+
+int get_hfd()
+{
+    char *h_path = get_h_path();
+    int hfd = open(h_path, O_RDWR | O_CREAT | O_APPEND, 0644);
+    free(h_path);
+    return hfd;
+}
+
+void history_add(const char *cmd)
+{
+    int hfd = get_hfd();
+    lseek(hfd, 0, SEEK_END);
+    write(hfd, cmd, strlen(cmd));
+    write(hfd, "\n", 1);
+    close(hfd);
+
+    history_load();
+}
+
+void unlink_ccsh_history()
+{
+    char *h_path = get_h_path();
+    unlink(h_path);
+    free(h_path);
+}
 
 extern int exec_cd(char *path);
 
@@ -64,6 +121,13 @@ void execute_cmd(char *cmd)
 {
     char **args = build_args(cmd);
 
+    if(strcasecmp(args[0], "history") == 0) {
+        int seq_no = 1;
+        for(int i = 0; i < history_count; i++)
+            printf("%5d\t%s", seq_no++, history[i]);
+        return;
+    }
+
     /**
      * cd must be executed within the main shell process.
      * A child process cannot change the current working directory of its parent.
@@ -105,9 +169,7 @@ void handle_cmd(char **segments)
                 close(pipefds[j][0]); close(pipefds[j][1]);
             }
 
-            char **args = build_args(segments[i]);
-            execvp(args[0], args);
-            perror("execvp");
+            execute_cmd(segments[i]);
             exit(1);
         }
     }
@@ -151,23 +213,22 @@ char **extract_segments(const char *cmd)
 
 int main()
 {
+    history_load();
+
     signal(SIGINT, SIG_IGN);
 
     printf("ccsh>");
     char buf[1000] = {};
     while(fgets(buf, sizeof(buf), stdin) != NULL) {
         char *cmd = trim(buf);
-        if(cmd != NULL) {
+        if(cmd != NULL) {            
+            history_add(cmd);
+
             if(strcasecmp(cmd, "exit") == 0)
                 break;
 
             char **segments = extract_segments(cmd);
             free(cmd);
-
-            for(int i = 0; segments[i] != NULL ; i++)
-                printf("[%s]\n", segments[i]);
-
-
 
             handle_cmd(segments);
             
