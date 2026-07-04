@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <sys/wait.h>
 #include <dirent.h>
+#include <signal.h>
 
 extern int exec_cd(char *path);
 
@@ -95,6 +96,7 @@ void handle_cmd(char **segments)
 
         pid_t pid = fork();
         if(pid == 0) {
+            signal(SIGINT, SIG_DFL);
 
             if(i > 0) dup2(pipefds[i-1][0], STDIN_FILENO);
             if(i < sc-1) dup2(pipefds[i][1], STDOUT_FILENO);
@@ -149,6 +151,8 @@ char **extract_segments(const char *cmd)
 
 int main()
 {
+    signal(SIGINT, SIG_IGN);
+
     printf("ccsh>");
     char buf[1000] = {};
     while(fgets(buf, sizeof(buf), stdin) != NULL) {
