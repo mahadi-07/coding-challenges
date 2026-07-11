@@ -3,7 +3,7 @@ CFLAGS := -g -Wall -Wextra -std=c11
 
 TARGET := bitcask
 
-SRC := bitcask.c db.c
+SRC := bitcask.c db.c helper.c
 OBJ := $(SRC:.c=.o)
 
 .PHONY: all clean run

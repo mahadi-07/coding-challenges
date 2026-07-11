@@ -1,10 +1,24 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "db.h"
 
 int main()
 {
+
+    bitcask_t *db = bitcask_open("./database", 100);
+    // printf("%s %d %d %zu\n", db->dir, db->active_fd, db->active_file_id, db->threshold);
+
+    bitcask_append(db, "shakil", "flksdjflkajsdklfjasdkf");
+    // bitcask_append(db, "11", "fklsjdklffjlksdf");
+
+    bitcask_close(db);
+    exit(0);
+
+
+
     char *db_path = "./database/cask.0";
     hashtable_t *ht = ht_new();
+
 
     db_load(ht, db_path);
 
